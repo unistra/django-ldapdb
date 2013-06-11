@@ -3,3 +3,7 @@
 .*.swp
 *.*~
 .svn
+.project
+.pydevproject
+.settings
+ldapdb.db

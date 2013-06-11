@@ -100,6 +100,6 @@ INSTALLED_APPS = (
     'django.contrib.admin',
 )
 
-LDAPDB_BIND_DN="cn=admin,dc=nodomain"
-LDAPDB_BIND_PASSWORD="test"
-LDAPDB_SERVER_URI="ldap://"
+#LDAPDB_BIND_DN="cn=admin,dc=nodomain"
+#LDAPDB_BIND_PASSWORD="test"
+#LDAPDB_SERVER_URI="ldap://"
