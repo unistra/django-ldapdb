@@ -7,3 +7,5 @@
 .pydevproject
 .settings
 ldapdb.db
+/dist
+/django_ldapdb.egg-info
