@@ -133,7 +133,7 @@ class Model(django.db.models.base.Model):
         connection.delete_s(self.dn)
         signals.post_delete.send(sender=self.__class__, instance=self)
 
-    def save(self, using=None):
+    def save(self, using=None, **kwargs):
         """
         Saves the current instance.
         """
