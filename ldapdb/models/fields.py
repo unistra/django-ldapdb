@@ -59,6 +59,8 @@ class CharField(fields.CharField):
             return [escape_ldap_filter(value)]
         elif lookup_type == 'in':
             return [escape_ldap_filter(v) for v in value]
+        elif lookup_type == 'isnull':
+            return ["" if value else "*"]
 
         raise TypeError("CharField has invalid lookup: %s" % lookup_type)
 
@@ -77,6 +79,8 @@ class CharField(fields.CharField):
             return escape_ldap_filter(value)
         elif lookup_type == 'in':
             return [escape_ldap_filter(v) for v in value]
+        elif lookup_type == 'isnull':
+            return "" if value else "*"
 
         raise TypeError("CharField has invalid lookup: %s" % lookup_type)
 
@@ -116,6 +120,8 @@ class IntegerField(fields.IntegerField):
         "Perform preliminary non-db specific lookup checks and conversions"
         if lookup_type in ('exact', 'gte', 'lte'):
             return value
+        elif lookup_type == 'isnull':
+            return '' if value else '*'
         raise TypeError("IntegerField has invalid lookup: %s" % lookup_type)
 
 class ListField(fields.Field):

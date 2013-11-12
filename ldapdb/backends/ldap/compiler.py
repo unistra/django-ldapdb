@@ -64,6 +64,9 @@ def where_as_ldap(self):
         if lookup_type == 'in':
             equal_bits = [ "(%s%s%s)" % (constraint.col, comp, value) for value in values ]
             clause = '(|%s)' % ''.join(equal_bits)
+        elif lookup_type == 'isnull' and not values:
+            clause = '(%s%s%s)' % (constraint.col, comp, '*')
+            self.negated = True
         else:
             clause = "(%s%s%s)" % (constraint.col, comp, values)
 
