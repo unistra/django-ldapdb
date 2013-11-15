@@ -38,7 +38,6 @@ from django.db import connections, router
 from django.db.models import signals
 import django.db.models
 import ldap
-import ldapdb
 import logging
 
 class QuerySet(django.db.models.query.QuerySet):
@@ -148,7 +147,10 @@ class Model(django.db.models.base.Model):
             for field in self._meta.fields:
                 if not field.db_column:
                     continue
-                value = getattr(self, field.name)
+                try:
+                    value = getattr(self, field.name)
+                except field.rel.to.DoesNotExist:
+                    value = None
                 if value:
                     entry.append((field.db_column, field.get_db_prep_save(value, connection=connection)))
 
@@ -170,12 +172,18 @@ class Model(django.db.models.base.Model):
             for field in self._meta.fields:
                 if not field.db_column:
                     continue
-                old_value = getattr(orig, field.name, None)
-                new_value = getattr(self, field.name, None)
+                try:
+                    old_value = getattr(orig, field.name, None)
+                except field.rel.to.DoesNotExist:
+                    old_value = None
+                try:
+                    new_value = getattr(self, field.name, None)
+                except field.rel.to.DoesNotExist:
+                    new_value = None
                 if old_value != new_value:
-                    if new_value:
+                    if new_value or isinstance(new_value, bool):
                         modlist.append((ldap.MOD_REPLACE, field.db_column, field.get_db_prep_save(new_value, connection=connection)))
-                    elif old_value:
+                    elif old_value or isinstance(old_value, bool):
                         modlist.append((ldap.MOD_DELETE, field.db_column, None))
 
             if len(modlist):
