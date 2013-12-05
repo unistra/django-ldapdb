@@ -191,6 +191,13 @@ class Model(django.db.models.base.Model):
                 new_dn = self.build_dn()
                 if new_dn != self.dn:
                     logging.debug("Renaming LDAP entry %s to %s" % (self.dn, new_dn))
+                    # change the branch of account in the tree
+                    if self.base_dn not in self.dn:
+                        connection.rename_s(self.dn,
+                                            self.build_rdn(),
+                                            newsuperior=self.base_dn)
+                    else:
+                        connection.rename_s(self.dn, self.build_rdn())
                     connection.rename_s(self.dn, self.build_rdn())
                     self.dn = new_dn
             
