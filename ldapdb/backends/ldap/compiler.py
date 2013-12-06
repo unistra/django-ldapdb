@@ -105,7 +105,7 @@ class SQLCompiler(object):
 
         try:
             vals = self.connection.search_s(
-                self.query.model.get_base_dn(self.using),
+                self.query.model.base_dn,
                 self.query.model.search_scope,
                 filterstr=query_as_ldap(self.query),
                 attrlist=['dn'],
@@ -136,7 +136,7 @@ class SQLCompiler(object):
 
         try:
             vals = self.connection.search_s(
-                self.query.model.get_base_dn(self.using),
+                self.query.model.base_dn,
                 self.query.model.search_scope,
                 filterstr=query_as_ldap(self.query),
                 attrlist=attrlist,
