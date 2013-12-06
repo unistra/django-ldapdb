@@ -198,7 +198,6 @@ class Model(django.db.models.base.Model):
                                             newsuperior=self.base_dn)
                     else:
                         connection.rename_s(self.dn, self.build_rdn())
-                    connection.rename_s(self.dn, self.build_rdn())
                     self.dn = new_dn
             
                 logging.debug("Modifying existing LDAP entry %s" % self.dn)
