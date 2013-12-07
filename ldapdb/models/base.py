@@ -163,6 +163,7 @@ class Model(django.db.models.base.Model):
         else:
             # update an existing entry
             record_exists = True
+            move_record = self.base_dn not in self.dn
             modlist = []
             # force use of alias in 'self.using' if any alias are sent in args.
             try:
@@ -186,17 +187,20 @@ class Model(django.db.models.base.Model):
                     elif old_value or isinstance(old_value, bool):
                         modlist.append((ldap.MOD_DELETE, field.db_column, None))
 
-            if len(modlist):
-                # handle renaming
+            if len(modlist) or move_record:
+                # handle renaming or moving
                 new_dn = self.build_dn()
                 if new_dn != self.dn:
-                    logging.debug("Renaming LDAP entry %s to %s" % (self.dn, new_dn))
                     # change the branch of account in the tree
-                    if self.base_dn not in self.dn:
+                    if move_record:
                         connection.rename_s(self.dn,
                                             self.build_rdn(),
                                             newsuperior=self.base_dn)
+                        logging.debug("Moving LDAP entry %s to %s" % (
+                                      self.dn, new_dn))
                     else:
+                        logging.debug("Renaming LDAP entry %s to %s" % (
+                                      self.dn, new_dn))
                         connection.rename_s(self.dn, self.build_rdn())
                     self.dn = new_dn
             
