@@ -125,13 +125,14 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         cursor = self._cursor()
         return cursor.connection.modify_s(dn.encode(self.charset), modlist)
 
-    def rename_s(self, dn, newrdn, newsuperior=None):
+    def rename_s(self, dn, newrdn, newsuperior=None, delold=1):
         cursor = self._cursor()
         if newsuperior:
             newsuperior = newsuperior.encode(self.charset)
         return cursor.connection.rename_s(dn.encode(self.charset),
                                           newrdn.encode(self.charset),
-                                          newsuperior=newsuperior)
+                                          newsuperior=newsuperior,
+                                          delold=delold)
 
     def search_s(self, base, scope, filterstr='(objectClass=*)',attrlist=None):
         cursor = self._cursor()

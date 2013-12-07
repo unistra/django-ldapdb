@@ -195,7 +195,8 @@ class Model(django.db.models.base.Model):
                     if move_record:
                         connection.rename_s(self.dn,
                                             self.build_rdn(),
-                                            newsuperior=self.base_dn)
+                                            newsuperior=self.base_dn,
+                                            delold=0)
                         logging.debug("Moving LDAP entry %s to %s" % (
                                       self.dn, new_dn))
                     else:
