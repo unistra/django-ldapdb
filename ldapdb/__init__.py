@@ -56,3 +56,15 @@ if hasattr(settings, 'LDAPDB_SERVER_URI'):
 
     # Add the LDAP router
     db.router.routers.append(Router())
+
+_DEFAULTS = {
+    'LDAPDB_LDAPOBJECT': 'ldapdb.backends.ldap.SyncLDAPObject',
+}
+
+for key, value in _DEFAULTS.iteritems():
+    try:
+        getattr(settings, key)
+    except AttributeError
+        setattr(settings, key, value)
+    except ImportError:
+        pass

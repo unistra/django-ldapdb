@@ -129,7 +129,7 @@ class Model(django.db.models.base.Model):
         using = using or router.db_for_write(self.__class__, instance=self)
         connection = connections[using]
         logging.debug("Deleting LDAP entry %s" % self.dn)
-        connection.delete_s(self.dn)
+        connection.delete(self.dn)
         signals.post_delete.send(sender=self.__class__, instance=self)
 
     def save(self, using=None, **kwargs):
@@ -155,7 +155,7 @@ class Model(django.db.models.base.Model):
                     entry.append((field.db_column, field.get_db_prep_save(value, connection=connection)))
 
             logging.debug("Creating new LDAP entry %s" % new_dn)
-            connection.add_s(new_dn, entry)
+            connection.add(new_dn, entry)
 
             # update object
             self.dn = new_dn
@@ -193,7 +193,7 @@ class Model(django.db.models.base.Model):
                 if new_dn != self.dn:
                     # change the branch of account in the tree
                     if move_record:
-                        connection.rename_s(self.dn,
+                        connection.rename(self.dn,
                                             self.build_rdn(),
                                             newsuperior=self.base_dn)
                         logging.debug("Moving LDAP entry %s to %s" % (
@@ -201,11 +201,11 @@ class Model(django.db.models.base.Model):
                     else:
                         logging.debug("Renaming LDAP entry %s to %s" % (
                                       self.dn, new_dn))
-                        connection.rename_s(self.dn, self.build_rdn())
+                        connection.rename(self.dn, self.build_rdn())
                     self.dn = new_dn
             
                 logging.debug("Modifying existing LDAP entry %s" % self.dn)
-                connection.modify_s(self.dn, modlist)
+                connection.modify(self.dn, modlist)
             else:
                 logging.debug("No changes to be saved to LDAP entry %s" % self.dn)
 

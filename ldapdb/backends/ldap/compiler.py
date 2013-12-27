@@ -104,7 +104,7 @@ class SQLCompiler(object):
                 raise Exception("Unsupported aggregate %s" % aggregate)
 
         try:
-            vals = self.connection.search_s(
+            vals = self.connection.search(
                 self.query.model.base_dn,
                 self.query.model.search_scope,
                 filterstr=query_as_ldap(self.query),
@@ -135,7 +135,7 @@ class SQLCompiler(object):
         attrlist = [ x.db_column for x in fields if x.db_column ]
 
         try:
-            vals = self.connection.search_s(
+            vals = self.connection.search(
                 self.query.model.base_dn,
                 self.query.model.search_scope,
                 filterstr=query_as_ldap(self.query),
@@ -202,7 +202,7 @@ class SQLInsertCompiler(compiler.SQLInsertCompiler, SQLCompiler):
 class SQLDeleteCompiler(compiler.SQLDeleteCompiler, SQLCompiler):
     def execute_sql(self, result_type=compiler.MULTI):
         try:
-            vals = self.connection.search_s(
+            vals = self.connection.search(
                 self.query.model.get_base_dn(self.using),
                 self.query.model.search_scope,
                 filterstr=query_as_ldap(self.query),
@@ -213,7 +213,7 @@ class SQLDeleteCompiler(compiler.SQLDeleteCompiler, SQLCompiler):
 
         # FIXME : there is probably a more efficient way to do this 
         for dn, attrs in vals:
-            self.connection.delete_s(dn)
+            self.connection.delete(dn)
 
 class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SQLCompiler):
     pass

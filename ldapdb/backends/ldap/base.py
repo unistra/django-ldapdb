@@ -87,17 +87,13 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     def _commit(self):
         pass
 
-    def _cursor(self):
+    def _cursor(self): 
+	ldapobject = __import__(settings.LDAPDB_LDAPOBJECT)	
         if self.connection is None:
-            #self.connection = ldap.initialize(self.settings_dict['NAME'])
-            self.connection = ldap.ldapobject.ReconnectLDAPObject(
-                    uri=self.settings_dict['NAME'],
-                    trace_level=0,
-                    )
+            self.connection = ldapobject(uri=self.settings_dict['NAME'],
+                    			 trace_level=0)
 
-            self.connection.simple_bind_s(
-                self.settings_dict['USER'],
-                self.settings_dict['PASSWORD'])
+            self.simple_bind()
 
             # Allow custom options to ldap. Active directory should set
             # ldap.OPT_REFERRALS as 0, or it not work.
@@ -105,6 +101,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             for opt_name,opt_value in ldap_options.items():
                     self.connection.set_option(opt_name,opt_value)
 
+ 
             #self.connection.set_option(ldap.OPT_TIMEOUT,1)
             #self.connection.set_option(ldap.OPT_TIMELIMIT,1)
 
@@ -113,35 +110,31 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     def _rollback(self):
         pass
 
-    def add_s(self, dn, modlist):
-        cursor = self._cursor()
-        return cursor.connection.add_s(dn.encode(self.charset), modlist)
+    def simple_bind(self):
+        self.connection.simple_bind(self.settings_dict['USER'],
+                                    self.settings_dict['PASSWORD'])
 
-    def delete_s(self, dn):
+    def add(self, dn, modlist):
         cursor = self._cursor()
-        return cursor.connection.delete_s(dn.encode(self.charset))
+        return cursor.connection.add(dn.encode(self.charset), modlist)
 
-    def modify_s(self, dn, modlist):
+    def delete(self, dn):
         cursor = self._cursor()
-        return cursor.connection.modify_s(dn.encode(self.charset), modlist)
+        return cursor.connection.delete(dn.encode(self.charset))
 
-    def rename_s(self, dn, newrdn, newsuperior=None):
+    def modify(self, dn, modlist):
+        cursor = self._cursor()
+        return cursor.connection.modify(dn.encode(self.charset), modlist)
+
+    def rename(self, dn, newrdn, newsuperior=None):
         cursor = self._cursor()
         if newsuperior:
             newsuperior = newsuperior.encode(self.charset)
-        return cursor.connection.rename_s(dn.encode(self.charset),
+        return cursor.connection.rename(dn.encode(self.charset),
                                           newrdn.encode(self.charset),
                                           newsuperior=newsuperior)
 
-    def search_s(self, base, scope, filterstr='(objectClass=*)',attrlist=None):
+    def search(self, base, scope, filterstr='(objectClass=*)', attrlist=None):
         cursor = self._cursor()
-        results = cursor.connection.search_s(base, scope, filterstr.encode(self.charset), attrlist)
-        output = []
-        for dn, attrs in results:
-            # In tests, Active Directory always return last line as 
-            # (None, ['ldap://DomainDnsZones.mydomain.corp/DC=DomainDnsZones,DC=mydomain,DC=corp'])]
-            # so we check for DN and avoid errors on results.
-            if dn:
-                output.append((dn.decode(self.charset), attrs))
-        return output
-
+        results = cursor.connection.search(base, scope, filterstr.encode(self.charset), attrlist)
+        return [(dn.decode(self.charset), attrs) for dn, attrs in results if dn] 
