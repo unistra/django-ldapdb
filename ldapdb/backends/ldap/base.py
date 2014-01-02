@@ -33,10 +33,13 @@
 #
 
 import django
-import ldap
 from django.conf import settings
 from django.db.backends import BaseDatabaseFeatures, BaseDatabaseOperations, BaseDatabaseWrapper
 from django.db.backends.creation import BaseDatabaseCreation
+
+from ... import import_from_string
+
+
 
 class DatabaseCreation(BaseDatabaseCreation):
     def create_test_db(self, verbosity=1, autoclobber=False):
@@ -88,8 +91,9 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         pass
 
     def _cursor(self): 
-	ldapobject = __import__(settings.LDAPDB_LDAPOBJECT)	
         if self.connection is None:
+	    ldapobject = import_from_string(settings.LDAPDB_LDAPOBJECT,
+                                            'LDAPDB_LDAPOBJECT')	
             self.connection = ldapobject(uri=self.settings_dict['NAME'],
                     			 trace_level=0)
 
@@ -111,8 +115,8 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         pass
 
     def simple_bind(self):
-        self.connection.simple_bind(self.settings_dict['USER'],
-                                    self.settings_dict['PASSWORD'])
+        self.connection.bind(who=self.settings_dict['USER'],
+                             cred=self.settings_dict['PASSWORD'])
 
     def add(self, dn, modlist):
         cursor = self._cursor()

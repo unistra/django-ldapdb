@@ -1,49 +1,51 @@
-from django.conf import settings
 import ldap
+import ldap.resiter
+from ldap.ldapobject import LDAPObject, ReconnectLDAPObject
 
 
-class AsyncLDAPObject(ldap.ldapobject.LDAPObject, ldap.resiter.ResultProcessor):
+class AsyncLDAPObject(LDAPObject, ldap.resiter.ResultProcessor):
 
-    def simple_bind(self, **credentials):
-        super(self, AsyncLDAPObject).simple_bind(**credentials)
+    def bind(self, **credentials):
+        LDAPObject.simple_bind(self, **credentials)
 
     def search(self, base, scope, filterstr='(objectClass=*)', attrlist=None):
-        msg_id = super(self, AsyncLDAPObject).search(base, scope, filterstr, attrlist)
+        msg_id = LDAPObject.search(self, base, scope, filterstr, attrlist)
 	return [data for _, data, _, _ in self.allresults(msg_id)]
 
     def rename(self, newrdn, newsuperior=None, delold=1):
-        msg_id = super(self, AsyncLDAPObject).rename(newrdn, newsuperior, delold)
+        msg_id = LDAPObject.rename(self, newrdn, newsuperior, delold)
 	return [data for _, data, _, _ in self.allresults(msg_id)]
 
     def modify(self, dn, modlist):
-        msg_id = super(self, AsyncLDAPObject).modify(dn, modlist)
+        msg_id = LDAPObject.modify(self, dn, modlist)
         return [data for _, data, _, _ in self.allresults(msg_id)]
 
     def delete(self, dn):
-        msg_id = super(self, AsyncLDAPObject).delete(dn)
+        msg_id = LDAPObject.delete(self, dn)
         return [data for _, data, _, _ in self.allresults(msg_id)]
 
     def add(self, dn, modlist):
-        msg_id = super(self, AsyncLDAPObject).add(dn, modlist)
+        msg_id = LDAPObject.add(self, dn, modlist)
         return [data for _, data, _, _ in self.allresults(msg_id)]
       
 
-class SyncLDAPObject(ldap.ldapobject.ReconnectLDAPObject):
+class SyncLDAPObject(ReconnectLDAPObject):
 
-    def simple_bind(self, **credentials):
-        super(self, SyncLDAPObject).simple_bind_s(**credentials)
+    def bind(self, **credentials):
+        ReconnectLDAPObject.simple_bind_s(self, **credentials)
 
     def search(self, base, scope, filterstr='(objectClass=*)', attrlist=None):
-        return super(self, SyncLDAPObject).search_s(base, scope, filterstr, attrlist)
+        return ReconnectLDAPObject.search_s(self, base, scope, filterstr, 
+                                            attrlist)
 
     def rename(self, newrdn, newsuperior=None, delold=1):
-        return super(self, SyncLDAPObject).rename_s(newrdn, newsuperior, delold)
+        return ReconnectLDAPObject.rename_s(self, newrdn, newsuperior, delold)
 
     def modify(self, dn, modlist):
-        return super(self, SyncLDAPObject).modify_s(dn, modlist)
+        return ReconnectLDAPObject.modify_s(self, dn, modlist)
 
     def delete(self, dn):
-        return super(self, SyncLDAPObject).delete_s(dn)
+        return ReconnectLDAPObject.delete_s(self, dn)
 
     def add(self, dn, modlist):
-        return super(self, SyncLDAPObject).add_s(dn, modlist)
+        return ReconnectLDAPObject.add_s(self, dn, modlist)
