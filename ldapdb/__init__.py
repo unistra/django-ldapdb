@@ -33,6 +33,7 @@
 #
 
 from django.conf import settings
+from django.utils import importlib
 
 def escape_ldap_filter(value):
     value = unicode(value)
@@ -64,7 +65,18 @@ _DEFAULTS = {
 for key, value in _DEFAULTS.iteritems():
     try:
         getattr(settings, key)
-    except AttributeError
+    except AttributeError:
         setattr(settings, key, value)
     except ImportError:
         pass
+
+
+def import_from_string(value, settings_name):
+
+    try:
+        module_path, class_name = value.rsplit('.', 1)
+        module = importlib.import_module(module_path)
+        return getattr(module, class_name)
+    except ImportError:
+        raise ImportError('Could not import "%s" for setting "%s"' % (
+            value, settings_name))
