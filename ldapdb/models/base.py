@@ -151,8 +151,11 @@ class Model(django.db.models.base.Model):
                     value = getattr(self, field.name)
                 except field.rel.to.DoesNotExist:
                     value = None
-                if value:
-                    entry.append((field.db_column, field.get_db_prep_save(value, connection=connection)))
+                if value or isinstance(value, bool):
+                    entry.append(
+                        (field.db_column,
+                         field.get_db_prep_save(value, connection=connection))
+                    )
 
             logging.debug("Creating new LDAP entry %s" % new_dn)
             connection.add_s(new_dn, entry)
