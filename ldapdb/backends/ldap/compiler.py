@@ -46,7 +46,12 @@ def get_lookup_operator(lookup_type):
         return '='
 
 def query_as_ldap(query):
-    filterstr = ''.join(['(objectClass=%s)' % cls for cls in query.model.object_classes])
+    # starting with django 1.6 we can receive empty querysets
+    if hasattr(query, 'is_empty') and query.is_empty():
+        return
+
+    filterstr = ''.join(['(objectClass=%s)' % cls for cls in
+                         query.model.object_classes])
     sql, params = where_as_ldap(query.where)
     filterstr += sql
     return '(&%s)' % filterstr
@@ -54,21 +59,26 @@ def query_as_ldap(query):
 def where_as_ldap(self):
     bits = []
     for item in self.children:
-        if hasattr(item, 'as_sql'):
+        if hasattr(item, 'lhs') and hasattr(item, 'rhs'):
+            # Django 1.7
+            item = item.lhs.target.column, item.lookup_name, None, item.rhs
+        elif hasattr(item, 'as_sql'):
             sql, params = where_as_ldap(item)
             bits.append(sql)
             continue
 
         constraint, lookup_type, y, values = item
+        if hasattr(constraint, 'col'):
+            constraint = constraint.col
         comp = get_lookup_operator(lookup_type)
         if lookup_type == 'in':
-            equal_bits = [ "(%s%s%s)" % (constraint.col, comp, value) for value in values ]
+            equal_bits = [ "(%s%s%s)" % (constraint, comp, value) for value in values ]
             clause = '(|%s)' % ''.join(equal_bits)
         elif lookup_type == 'isnull' and not values:
-            clause = '(%s%s%s)' % (constraint.col, comp, '*')
+            clause = '(%s%s%s)' % (constraint, comp, '*')
             self.negated = True
         else:
-            clause = "(%s%s%s)" % (constraint.col, comp, values)
+            clause = "(%s%s%s)" % (constraint, comp, values)
 
         bits.append(clause)
 
@@ -103,11 +113,15 @@ class SQLCompiler(object):
             if not isinstance(aggregate, aggregates.Count):
                 raise Exception("Unsupported aggregate %s" % aggregate)
 
+        filterstr = query_as_ldap(self.query)
+        if not filterstr:
+            return
+
         try:
             vals = self.connection.search_s(
                 self.query.model.base_dn,
                 self.query.model.search_scope,
-                filterstr=query_as_ldap(self.query),
+                filterstr=filterstr,
                 attrlist=['dn'],
             )
         except ldap.NO_SUCH_OBJECT:
@@ -127,18 +141,26 @@ class SQLCompiler(object):
         return output
 
     def results_iter(self):
-        if self.query.select_fields:
+        filterstr = query_as_ldap(self.query)
+        if not filterstr:
+            return
+
+        if hasattr(self.query, 'select_fields') and len(self.query.select_fields):
+            # django < 1.6
             fields = self.query.select_fields
+        elif len(self.query.select):
+            # django >= 1.6
+            fields = [x.field for x in self.query.select]
         else:
             fields = self.query.model._meta.fields
 
-        attrlist = [ x.db_column for x in fields if x.db_column ]
+        attrlist = [x.db_column for x in fields if x.db_column]
 
         try:
             vals = self.connection.search_s(
                 self.query.model.base_dn,
                 self.query.model.search_scope,
-                filterstr=query_as_ldap(self.query),
+                filterstr=filterstr,
                 attrlist=attrlist,
             )
         except ldap.NO_SUCH_OBJECT:
@@ -201,11 +223,15 @@ class SQLInsertCompiler(compiler.SQLInsertCompiler, SQLCompiler):
 
 class SQLDeleteCompiler(compiler.SQLDeleteCompiler, SQLCompiler):
     def execute_sql(self, result_type=compiler.MULTI):
+        filterstr = query_as_ldap(self.query)
+        if not filterstr:
+            return
+            
         try:
             vals = self.connection.search_s(
                 self.query.model.get_base_dn(self.using),
                 self.query.model.search_scope,
-                filterstr=query_as_ldap(self.query),
+                filterstr=filterstr,
                 attrlist=['dn'],
             )
         except ldap.NO_SUCH_OBJECT:
