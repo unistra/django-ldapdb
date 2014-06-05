@@ -33,9 +33,14 @@
 #
 
 import ldap
+import logging
 
 from django.db.models.sql import aggregates, compiler
 from django.db.models.sql.where import AND, OR
+
+
+logger = logging.getLogger(__name__)
+
 
 def get_lookup_operator(lookup_type):
     if lookup_type == 'gte':
@@ -54,6 +59,8 @@ def query_as_ldap(query):
                          query.model.object_classes])
     sql, params = where_as_ldap(query.where)
     filterstr += sql
+    logger.debug(filterstr)
+
     return '(&%s)' % filterstr
 
 def where_as_ldap(self):
@@ -218,6 +225,7 @@ class SQLCompiler(object):
             yield row
             pos += 1
 
+
 class SQLInsertCompiler(compiler.SQLInsertCompiler, SQLCompiler):
     pass
 
@@ -226,7 +234,7 @@ class SQLDeleteCompiler(compiler.SQLDeleteCompiler, SQLCompiler):
         filterstr = query_as_ldap(self.query)
         if not filterstr:
             return
-            
+
         try:
             vals = self.connection.search_s(
                 self.query.model.get_base_dn(self.using),
@@ -237,7 +245,7 @@ class SQLDeleteCompiler(compiler.SQLDeleteCompiler, SQLCompiler):
         except ldap.NO_SUCH_OBJECT:
             return
 
-        # FIXME : there is probably a more efficient way to do this 
+        # FIXME : there is probably a more efficient way to do this
         for dn, attrs in vals:
             self.connection.delete_s(dn)
 
