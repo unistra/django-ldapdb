@@ -47,6 +47,10 @@ def get_lookup_operator(lookup_type):
         return '>='
     elif lookup_type == 'lte':
         return '<='
+    elif lookup_type == 'gt':
+        return '>'
+    elif lookup_type == 'lt':
+        return '<'
     else:
         return '='
 
