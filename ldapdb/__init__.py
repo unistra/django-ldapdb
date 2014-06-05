@@ -32,15 +32,21 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+import logging
 from django.conf import settings
 
+
+logger = logging.getLogger(__name__)
+
 def escape_ldap_filter(value):
-    value = unicode(value)
-    return value.replace('\\', '\\5c') \
-                .replace('*', '\\2a') \
-                .replace('(', '\\28') \
-                .replace(')', '\\29') \
-                .replace('\0', '\\00')
+    uvalue = unicode(value, 'utf-8', 'replace')
+    if value != uvalue.encode('utf-8', 'ignore'):
+        logger.warn('Encoding problem %s <-> %s' % (value, uvalue))
+    return uvalue.replace('\\', '\\5c') \
+                 .replace('*', '\\2a') \
+                 .replace('(', '\\28') \
+                 .replace(')', '\\29') \
+                 .replace('\0', '\\00')
 
 # Legacy single database support
 if hasattr(settings, 'LDAPDB_SERVER_URI'):
