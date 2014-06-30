@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "django-ldapdb",
-    version = "1.0.4",
+    version = "1.0.5",
     #license = ldapdb.__license__,
     url = "http://opensource.bolloretelecom.eu/projects/django-ldapdb/",
     author = "Jeremy Laine",
