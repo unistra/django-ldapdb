@@ -144,13 +144,16 @@ class Model(django.db.models.base.Model):
             entry = [('objectClass', self.object_classes)]
             new_dn = self.build_dn()
 
-            for field in self._meta.fields:
-                if not field.db_column:
+            fields = (field for field in self._meta.fields
+                      if field.name != 'dn')
+
+            for field in fields:
+                if not field.editable:
                     continue
-                try:
+                if field.rel is not None:
+                    value = getattr(self, field.attname, None)
+                else:
                     value = getattr(self, field.name)
-                except field.rel.to.DoesNotExist:
-                    value = None
                 if value or isinstance(value, bool):
                     entry.append(
                         (field.db_column,
@@ -173,17 +176,19 @@ class Model(django.db.models.base.Model):
                 orig = self.__class__.objects.using(using or self._state.db ).get(pk=self.saved_pk)
             except Exception:
                 raise ValueError,u"Unknow connection. Need a instance to know the connection."
-            for field in self._meta.fields:
-                if not field.db_column:
+
+            fields = (field for field in self._meta.fields
+                      if field.name != 'dn')
+
+            for field in fields:
+                if not field.editable:
                     continue
-                try:
+                if field.rel is not None:
+                    old_value = getattr(orig, field.attname, None)
+                    new_value = getattr(self, field.attname, None)
+                else:
                     old_value = getattr(orig, field.name, None)
-                except field.rel.to.DoesNotExist:
-                    old_value = None
-                try:
                     new_value = getattr(self, field.name, None)
-                except field.rel.to.DoesNotExist:
-                    new_value = None
                 if old_value != new_value:
                     if new_value or isinstance(new_value, bool):
                         modlist.append((ldap.MOD_REPLACE, field.db_column, field.get_db_prep_save(new_value, connection=connection)))
