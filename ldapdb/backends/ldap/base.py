@@ -34,6 +34,7 @@
 
 import django
 import ldap
+from ldap.controls import SimplePagedResultsControl
 from django.conf import settings
 from django.db.backends import BaseDatabaseFeatures, BaseDatabaseOperations, BaseDatabaseWrapper
 from django.db.backends.creation import BaseDatabaseCreation
@@ -118,6 +119,39 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     def _rollback(self):
         pass
 
+    def _paged_search(self, connection, base, scope, filterstr, attrlist):
+        page_size = self.settings_dict.get('PAGE_SIZE', 1000)
+        results = []
+        pg_ctrl = SimplePagedResultsControl(True, page_size, "")
+        scope = ldap.SCOPE_SUBTREE
+        pages = 0
+
+        while True:
+            pages += 1
+            msgid = connection.search_ext(
+                base,
+                scope=scope,
+                filterstr=filterstr,
+                attrlist=attrlist,
+                serverctrls=[pg_ctrl]
+            )
+            rtype, rdata, rmsgid, serverctrls = connection.result3(msgid)
+            results.extend(rdata)
+            cookie = serverctrls[0].cookie
+            if cookie:
+                pg_ctrl.cookie = cookie
+                search = connection.search_ext(
+                    base,
+                    scope=scope,
+                    filterstr=filterstr,
+                    attrlist=attrlist,
+                    serverctrls=[pg_ctrl]
+                )
+            else:
+                break
+
+        return results
+
     def add_s(self, dn, modlist):
         cursor = self._cursor()
         return cursor.connection.add_s(dn.encode(self.charset), modlist)
@@ -141,7 +175,15 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
     def search_s(self, base, scope, filterstr='(objectClass=*)',attrlist=None):
         cursor = self._cursor()
-        results = cursor.connection.search_s(base, scope, filterstr.encode(self.charset), attrlist)
+        pagination = self.settings_dict.get('SUPPORTS_PAGINATION', False)
+        filterstr = filterstr.encode(self.charset)
+        results = []
+        
+        if pagination:
+            results = self._paged_search(cursor.connection, base, scope, filterstr, attrlist)
+        else:
+            results = cursor.connection.search_s(base, scope, filterstr, attrlist)
+
         output = []
         for dn, attrs in results:
             # In tests, Active Directory always return last line as 
