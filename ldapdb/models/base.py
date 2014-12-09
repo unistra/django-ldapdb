@@ -53,12 +53,12 @@ class QuerySet(django.db.models.query.QuerySet):
 
 class ModelManager(django.db.models.manager.Manager):
 
-    def get_query_set(self):
+    def get_queryset(self):
         # force using to choose right server
         return QuerySet(self.model, using=self._db).using(self._db)
 
     def using(self,alias):
-        return self.get_query_set().using(alias)
+        return self.get_queryset().using(alias)
 
 class Model(django.db.models.base.Model):
     """
