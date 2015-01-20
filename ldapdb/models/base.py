@@ -40,6 +40,9 @@ import django.db.models
 import ldap
 import logging
 
+logger = logging.getLogger('ldapdb')
+
+
 class QuerySet(django.db.models.query.QuerySet):
 
     def using(self, alias):
@@ -128,7 +131,7 @@ class Model(django.db.models.base.Model):
         """
         using = using or router.db_for_write(self.__class__, instance=self)
         connection = connections[using]
-        logging.debug("Deleting LDAP entry %s" % self.dn)
+        logger.debug("Deleting LDAP entry %s" % self.dn)
         connection.delete_s(self.dn)
         signals.post_delete.send(sender=self.__class__, instance=self)
 
@@ -143,6 +146,7 @@ class Model(django.db.models.base.Model):
             record_exists = False 
             entry = [('objectClass', self.object_classes)]
             new_dn = self.build_dn()
+            logger.debug(new_dn)
 
             fields = (field for field in self._meta.fields
                       if field.name != 'dn')
@@ -160,7 +164,7 @@ class Model(django.db.models.base.Model):
                          field.get_db_prep_save(value, connection=connection))
                     )
 
-            logging.debug("Creating new LDAP entry %s" % new_dn)
+            logger.debug("Creating new LDAP entry %s" % new_dn)
             connection.add_s(new_dn, entry)
 
             # update object
@@ -205,18 +209,18 @@ class Model(django.db.models.base.Model):
                                             self.build_rdn(),
                                             newsuperior=self.base_dn,
                                             delold=0)
-                        logging.debug("Moving LDAP entry %s to %s" % (
+                        logger.debug("Moving LDAP entry %s to %s" % (
                                       self.dn, new_dn))
                     else:
-                        logging.debug("Renaming LDAP entry %s to %s" % (
+                        logger.debug("Renaming LDAP entry %s to %s" % (
                                       self.dn, new_dn))
                         connection.rename_s(self.dn, self.build_rdn())
                     self.dn = new_dn
             
-                logging.debug("Modifying existing LDAP entry %s" % self.dn)
+                logger.debug("Modifying existing LDAP entry %s" % self.dn)
                 connection.modify_s(self.dn, modlist)
             else:
-                logging.debug("No changes to be saved to LDAP entry %s" % self.dn)
+                logger.debug("No changes to be saved to LDAP entry %s" % self.dn)
 
         # done
         self.saved_pk = self.pk
