@@ -152,6 +152,12 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
         return results
 
+    def bind_s(self, dn, password):
+        cursor = self._cursor()
+        return cursor.connection.bind_s(dn.encode(self.charset),
+                                        password,
+                                        ldap.AUTH_SIMPLE)
+
     def add_s(self, dn, modlist):
         cursor = self._cursor()
         return cursor.connection.add_s(dn.encode(self.charset), modlist)
