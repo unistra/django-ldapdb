@@ -110,7 +110,7 @@ def where_as_ldap(self):
 
     return sql_string, []
 
-class SQLCompiler(object):
+class SQLCompiler(compiler.SQLCompiler):
     def __init__(self, query, connection, using):
         self.query = query
         self.connection = connection
