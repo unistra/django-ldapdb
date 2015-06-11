@@ -41,11 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 def escape_ldap_filter(value):
-    try:
-        uvalue = unicode(value)
-    except Exception:
-        logger.error('Encoding problem for value : %s' % value)
-    return uvalue.replace('\\', '\\5c') \
+    return value.replace('\\', '\\5c') \
                  .replace('*', '\\2a') \
                  .replace('(', '\\28') \
                  .replace(')', '\\29') \

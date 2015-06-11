@@ -45,7 +45,7 @@ class CharField(fields.CharField):
         if len(value) == 0:
             return ''
         else:
-            return value[0].decode(connection.charset)
+            return value[0]
 
     def get_db_prep_lookup(self, lookup_type, value, connection, prepared=False):
         "Returns field's value prepared for database lookup."
@@ -65,7 +65,7 @@ class CharField(fields.CharField):
         raise TypeError("CharField has invalid lookup: %s" % lookup_type)
 
     def get_db_prep_save(self, value, connection):
-        return [value.encode(connection.charset)]
+        return [value]
 
     def get_prep_lookup(self, lookup_type, value):
         "Perform preliminary non-db specific lookup checks and conversions"
@@ -135,7 +135,7 @@ class ListField(fields.Field):
         return [self.get_prep_lookup(lookup_type, value)]
 
     def get_db_prep_save(self, value, connection):
-        return [x.encode(connection.charset) for x in value]
+        return value
 
     def get_prep_lookup(self, lookup_type, value):
         "Perform preliminary non-db specific lookup checks and conversions"

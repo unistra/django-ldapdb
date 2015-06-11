@@ -154,35 +154,30 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
     def bind_s(self, dn, password):
         cursor = self._cursor()
-        return cursor.connection.bind_s(dn.encode(self.charset),
-                                        password,
-                                        ldap.AUTH_SIMPLE)
+        return cursor.connection.bind_s(dn, password, ldap.AUTH_SIMPLE)
 
     def add_s(self, dn, modlist):
         cursor = self._cursor()
-        return cursor.connection.add_s(dn.encode(self.charset), modlist)
+        return cursor.connection.add_s(dn, modlist)
 
     def delete_s(self, dn):
         cursor = self._cursor()
-        return cursor.connection.delete_s(dn.encode(self.charset))
+        return cursor.connection.delete_s(dn)
 
     def modify_s(self, dn, modlist):
         cursor = self._cursor()
-        return cursor.connection.modify_s(dn.encode(self.charset), modlist)
+        return cursor.connection.modify_s(dn, modlist)
 
     def rename_s(self, dn, newrdn, newsuperior=None, delold=1):
         cursor = self._cursor()
-        if newsuperior:
-            newsuperior = newsuperior.encode(self.charset)
-        return cursor.connection.rename_s(dn.encode(self.charset),
-                                          newrdn.encode(self.charset),
+        return cursor.connection.rename_s(dn,
+                                          newrdn,
                                           newsuperior=newsuperior,
                                           delold=delold)
 
     def search_s(self, base, scope, filterstr='(objectClass=*)',attrlist=None):
         cursor = self._cursor()
         pagination = self.settings_dict.get('SUPPORTS_PAGINATION', False)
-        filterstr = filterstr.encode(self.charset)
         results = []
         
         if pagination:
@@ -196,6 +191,6 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             # (None, ['ldap://DomainDnsZones.mydomain.corp/DC=DomainDnsZones,DC=mydomain,DC=corp'])]
             # so we check for DN and avoid errors on results.
             if dn:
-                output.append((dn.decode(self.charset), attrs))
+                output.append((dn, attrs))
         return output
 

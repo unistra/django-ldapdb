@@ -32,6 +32,7 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+from functools import cmp_to_key
 import ldap
 import logging
 
@@ -202,11 +203,12 @@ class SQLCompiler(compiler.SQLCompiler):
                     attr_x = attr_x.lower()
                 if hasattr(attr_y, 'lower'):
                     attr_y = attr_y.lower()
-                val = negate and cmp(attr_y, attr_x) or cmp(attr_x, attr_y)
+                cmp = lambda a, b: (a > b) - (a < b)
+                val = cmp(attr_y, attr_x) if negate else cmp(attr_x, attr_y)
                 if val:
                     return val
             return 0
-        vals = sorted(vals, cmp=cmpvals)
+        vals = sorted(vals, key=cmp_to_key(cmpvals))
 
         # process results
         pos = 0

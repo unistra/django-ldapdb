@@ -80,12 +80,12 @@ class Model(django.db.models.base.Model):
         try:
             conn_dict = settings.DATABASES[alias]
         except KeyError:
-            raise exceptions.ImproperlyConfigured,u"Connection settings for '%s' not found. Please, setup a connection in DATABASES configuration at settings.py" % alias
+            raise exceptions.ImproperlyConfigured("Connection settings for '%s' not found. Please, setup a connection in DATABASES configuration at settings.py" % alias)
         else:
             try:
                 return conn_dict['BASE_DN']
             except KeyError:
-                raise exceptions.ImproperlyConfigured,u"Connections settings for '%(conn)s' found, but BASE_DN for '%(conn)s' not found in settings. Please configure a BASE_DN for connection '%(conn)s'." % {'conn': alias}
+                raise exceptions.ImproperlyConfigured("Connections settings for '%(conn)s' found, but BASE_DN for '%(conn)s' not found in settings. Please configure a BASE_DN for connection '%(conn)s'." % {'conn': alias})
 
     @property
     def base_dn(self):
@@ -93,14 +93,14 @@ class Model(django.db.models.base.Model):
         try:
             return self.__class__.get_base_dn(self._state.db)
         except Exception:
-            raise ValueError,u"Unknow connection. Need a instance to know the connection."
+            raise ValueError("Unknow connection. Need a instance to know the connection.")
 
     @property
     def using(self):
         try:
             return self._state.db
         except Exception:
-            raise ValueError,u"Unknow connection. Need a instance to know the connection."
+            raise ValueError("Unknow connection. Need a instance to know the connection.")
 
     def __init__(self, *args, **kwargs):
         super(Model, self).__init__(*args, **kwargs)
@@ -179,7 +179,7 @@ class Model(django.db.models.base.Model):
             try:
                 orig = self.__class__.objects.using(using or self._state.db ).get(pk=self.saved_pk)
             except Exception:
-                raise ValueError,u"Unknow connection. Need a instance to know the connection."
+                raise ValueError("Unknow connection. Need a instance to know the connection.")
 
             fields = (field for field in self._meta.fields
                       if field.name != 'dn')
