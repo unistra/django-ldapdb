@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# from distutils.core import setup
 from setuptools import setup, find_packages
 
 setup(
@@ -13,4 +12,9 @@ setup(
     author_email = "jeremy.laine@bolloretelecom.eu",
     packages = find_packages(),
     zip_safe = False,
+    install_requires=[
+        'six',
+        'python-ldap;python_version<"3.0"',
+        'pyldap;python_version>="3.0"',
+    ]
 )

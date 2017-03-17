@@ -38,6 +38,7 @@ import logging
 
 from django.db.models.sql import aggregates, compiler
 from django.db.models.sql.where import AND, OR
+import six
 
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,6 @@ def where_as_ldap(self):
 
     if self.negated:
         sql_string = ('(!%s)' % sql_string)
-
     return sql_string, []
 
 class SQLCompiler(compiler.SQLCompiler):
@@ -143,7 +143,7 @@ class SQLCompiler(compiler.SQLCompiler):
             return None
 
         output = []
-        for alias, col in self.query.extra_select.iteritems():
+        for alias, col in six.iteritems(self.query.extra_select):
             output.append(col[0])
         for key, aggregate in self.query.aggregate_select.items():
             if isinstance(aggregate, aggregates.Count):
@@ -243,7 +243,7 @@ class SQLDeleteCompiler(compiler.SQLDeleteCompiler, SQLCompiler):
 
         try:
             vals = self.connection.search_s(
-                self.query.model.get_base_dn(self.using),
+                self.query.model.base_dn,
                 self.query.model.search_scope,
                 filterstr=filterstr,
                 attrlist=['dn'],

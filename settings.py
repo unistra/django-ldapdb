@@ -20,9 +20,10 @@ DATABASES = {
     },
     'ldap': {
         'ENGINE': 'ldapdb.backends.ldap',
-        'NAME': 'ldap://',
-        'USER': 'cn=admin,dc=nodomain',
-        'PASSWORD': 'test',
+        'NAME': 'ldap://localhost',
+        'USER': '',
+        'PASSWORD': '',
+        'BASE_DN': 'dc=nodomain',
     }
 }
 DATABASE_ROUTERS = ['ldapdb.router.Router']

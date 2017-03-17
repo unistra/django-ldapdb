@@ -32,68 +32,77 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
+from collections import Counter
+import re
+
 from django.db import connections, router
 from django.db.models import Q
 from django.test import TestCase
-
-import ldap
+import mock
+from mockldap import MockLdap
+import six
 
 from ldapdb.backends.ldap.compiler import query_as_ldap
 from examples.models import LdapUser, LdapGroup
 
+
+def mock_rename_s(obj, dn, newrdn, newsuperior=None, delold=1):
+    cursor = obj._cursor()
+    return cursor.connection.rename_s(dn,
+                                      newrdn,
+                                      newsuperior=newsuperior)
+
+
 class BaseTestCase(TestCase):
-    def _add_base_dn(self, model):
-        using = router.db_for_write(model)
-        connection = connections[using]
 
-        rdn = model.base_dn.split(',')[0]
-        key, val = rdn.split('=')
-        attrs = [('objectClass', ['top', 'organizationalUnit']), (key, [val])]
-        try:
-            connection.add_s(model.base_dn, attrs)
-        except ldap.ALREADY_EXISTS:
-            pass
+    nodomain = ('dc=nodomain', {'dc': 'nodomain'})
+    groups = ('ou=groups,dc=nodomain', {'ou': 'groups'})
+    people = ('ou=people,dc=nodomain', {'ou': 'people'})
+    contacts = ('ou=contacts,ou=groups,dc=nodomain', {'ou': 'contacts'})
+    directory = dict([nodomain, groups, people, contacts])
 
-    def _remove_base_dn(self, model):
-        using = router.db_for_write(model)
-        connection = connections[using]
+    @classmethod
+    def setUpClass(cls):
+        cls.mockldap = MockLdap(cls.directory)
 
-        try:
-            results = connection.search_s(model.base_dn, ldap.SCOPE_SUBTREE)
-            for dn, attrs in reversed(results):
-                connection.delete_s(dn)
-        except ldap.NO_SUCH_OBJECT:
-            pass
+    @classmethod
+    def tearDownClass(cls):
+        del cls.mockldap
 
     def setUp(self):
-        for model in [LdapGroup, LdapUser]:
-            self._add_base_dn(model)
+        self.mockldap.start(path='ldap.ldapobject.ReconnectLDAPObject')
 
     def tearDown(self):
-        for model in [LdapGroup, LdapUser]:
-            self._remove_base_dn(model)
+        self.mockldap.stop(path='ldap.ldapobject.ReconnectLDAPObject')
+
+    # def _add_base_dn(self, model):
+    #     base_dn = model.base_dn
+    #     entry = base_dn.split(',')[0].split('=')
+    #     self.directory[base_dn] = dict([entry])
 
 class GroupTestCase(BaseTestCase):
+
     def setUp(self):
         super(GroupTestCase, self).setUp()
 
-        g = LdapGroup()
-        g.name = "foogroup"
-        g.gid = 1000
-        g.usernames = ['foouser', 'baruser']
-        g.save()
+        LdapGroup.objects.create(
+            name='foogroup', gid=1000, usernames=['foouser', 'baruser'])
+        LdapGroup.objects.create(
+            name='bargroup', gid=1001, usernames=['zoouser', 'baruser'])
+        LdapGroup.objects.create(
+            name='wizgroup', gid=1002, usernames=['wizuser', 'baruser'])
 
-        g = LdapGroup()
-        g.name = "bargroup"
-        g.gid = 1001
-        g.usernames = ['zoouser', 'baruser']
-        g.save()
-
-        g = LdapGroup()
-        g.name = "wizgroup"
-        g.gid = 1002
-        g.usernames = ['wizuser', 'baruser']
-        g.save()
+    def assertQueryAsLdapEqual(self, ldap_filter, value):
+        pattern = '(\(\w*=\w*\))'
+        self.assertTrue(
+            all([
+                len(ldap_filter) == len(value),
+                Counter(ldap_filter) == Counter(value),
+                Counter(re.findall(pattern, ldap_filter)) ==
+                Counter(re.findall(pattern, ldap_filter))
+            ]),
+            "'%s' does not match query '%s'" % (ldap_filter, value)
+        )
 
     def test_count(self):
         # empty query
@@ -113,35 +122,34 @@ class GroupTestCase(BaseTestCase):
     def test_ldap_filter(self):
         # single filter
         qs = LdapGroup.objects.filter(name='foogroup')
-        self.assertEquals(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(cn=foogroup))')
+        self.assertQueryAsLdapEqual(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(cn=foogroup))')
 
         qs = LdapGroup.objects.filter(Q(name='foogroup'))
-        self.assertEquals(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(cn=foogroup))')
+        self.assertQueryAsLdapEqual(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(cn=foogroup))')
 
-        # AND filter
         qs = LdapGroup.objects.filter(gid=1000, name='foogroup')
-        self.assertEquals(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(&(gidNumber=1000)(cn=foogroup)))')
+        self.assertQueryAsLdapEqual(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(&(gidNumber=1000)(cn=foogroup)))')
 
         qs = LdapGroup.objects.filter(Q(gid=1000) & Q(name='foogroup'))
-        self.assertEquals(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(&(gidNumber=1000)(cn=foogroup)))')
+        self.assertQueryAsLdapEqual(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(&(gidNumber=1000)(cn=foogroup)))')
 
         # OR filter
         qs = LdapGroup.objects.filter(Q(gid=1000) | Q(name='foogroup'))
-        self.assertEquals(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(|(gidNumber=1000)(cn=foogroup)))')
+        self.assertQueryAsLdapEqual(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(|(gidNumber=1000)(cn=foogroup)))')
 
         # single exclusion
         qs = LdapGroup.objects.exclude(name='foogroup')
-        self.assertEquals(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(!(cn=foogroup)))')
+        self.assertQueryAsLdapEqual(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(!(cn=foogroup)))')
         
         qs = LdapGroup.objects.filter(~Q(name='foogroup'))
-        self.assertEquals(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(!(cn=foogroup)))')
+        self.assertQueryAsLdapEqual(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(!(cn=foogroup)))')
 
         # multiple exclusion
         qs = LdapGroup.objects.exclude(name='foogroup', gid=1000)
-        self.assertEquals(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(!(&(gidNumber=1000)(cn=foogroup))))')
+        self.assertQueryAsLdapEqual(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(!(&(gidNumber=1000)(cn=foogroup))))')
 
         qs = LdapGroup.objects.filter(name='foogroup').exclude(gid=1000)
-        self.assertEquals(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(&(cn=foogroup)(!(gidNumber=1000))))')
+        self.assertQueryAsLdapEqual(query_as_ldap(qs.query), '(&(objectClass=posixGroup)(&(cn=foogroup)(!(gidNumber=1000))))')
 
     def test_filter(self):
         qs = LdapGroup.objects.filter(name='foogroup')
@@ -223,7 +231,7 @@ class GroupTestCase(BaseTestCase):
         self.assertEquals(len(qs), 0)
 
     def test_slice(self):
-        qs = LdapGroup.objects.all()
+        qs = LdapGroup.objects.all().order_by('gid')
         objs = list(qs)
         self.assertEquals(len(objs), 3)
         self.assertEquals(objs[0].gid, 1000)
@@ -231,7 +239,7 @@ class GroupTestCase(BaseTestCase):
         self.assertEquals(objs[2].gid, 1002)
 
         # limit only
-        qs = LdapGroup.objects.all()
+        qs = LdapGroup.objects.all().order_by('gid')
         objs = qs[:2]
         self.assertEquals(objs.count(), 2)
 
@@ -241,7 +249,7 @@ class GroupTestCase(BaseTestCase):
         self.assertEquals(objs[1].gid, 1001)
 
         # offset only
-        qs = LdapGroup.objects.all()
+        qs = LdapGroup.objects.all().order_by('gid')
         objs = qs[1:]
         self.assertEquals(objs.count(), 2)
 
@@ -251,7 +259,7 @@ class GroupTestCase(BaseTestCase):
         self.assertEquals(objs[1].gid, 1002)
 
         # offset and limit
-        qs = LdapGroup.objects.all()
+        qs = LdapGroup.objects.all().order_by('gid')
         objs = qs[1:2]
         self.assertEquals(objs.count(), 1)
 
@@ -259,6 +267,8 @@ class GroupTestCase(BaseTestCase):
         self.assertEquals(len(objs), 1)
         self.assertEquals(objs[0].gid, 1001)
 
+    @mock.patch('ldapdb.backends.ldap.base.DatabaseWrapper.rename_s',
+                new=mock_rename_s)
     def test_update(self):
         g = LdapGroup.objects.get(name='foogroup')
 
@@ -272,17 +282,21 @@ class GroupTestCase(BaseTestCase):
         self.assertEquals(g.dn, 'cn=foogroup2,%s' % LdapGroup.base_dn)
 
     def test_values(self):
-        qs = LdapGroup.objects.values('name')
+        qs = sorted(
+            LdapGroup.objects.values('name'),
+            key=lambda x: x['name'])
         self.assertEquals(len(qs), 3)
-        self.assertEquals(qs[0], {'name': 'foogroup'})
-        self.assertEquals(qs[1], {'name': 'bargroup'})
+        self.assertEquals(qs[0], {'name': 'bargroup'})
+        self.assertEquals(qs[1], {'name': 'foogroup'})
         self.assertEquals(qs[2], {'name': 'wizgroup'})
 
     def test_values_list(self):
-        qs = LdapGroup.objects.values_list('name')
+        qs = sorted(
+            LdapGroup.objects.values_list('name'),
+            key=lambda x: x[0])
         self.assertEquals(len(qs), 3)
-        self.assertEquals(qs[0], ('foogroup',))
-        self.assertEquals(qs[1], ('bargroup',))
+        self.assertEquals(qs[0], ('bargroup',))
+        self.assertEquals(qs[1], ('foogroup',))
         self.assertEquals(qs[2], ('wizgroup',))
 
     def test_delete(self):
@@ -292,21 +306,20 @@ class GroupTestCase(BaseTestCase):
         qs = LdapGroup.objects.all()
         self.assertEquals(len(qs), 2)
 
+
 class UserTestCase(BaseTestCase):
+
     def setUp(self):
         super(UserTestCase, self).setUp()
 
-        u = LdapUser()
-        u.first_name = u"Fôo"
-        u.last_name = u"Usér"
-        u.full_name = u"Fôo Usér"
-
-        u.group = 1000
-        u.home_directory = "/home/foouser"
-        u.uid = 2000
-        u.username = "foouser"
-        u.photo = '\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xfe\x00\x1cCreated with GIMP on a Mac\xff\xdb\x00C\x00\x05\x03\x04\x04\x04\x03\x05\x04\x04\x04\x05\x05\x05\x06\x07\x0c\x08\x07\x07\x07\x07\x0f\x0b\x0b\t\x0c\x11\x0f\x12\x12\x11\x0f\x11\x11\x13\x16\x1c\x17\x13\x14\x1a\x15\x11\x11\x18!\x18\x1a\x1d\x1d\x1f\x1f\x1f\x13\x17"$"\x1e$\x1c\x1e\x1f\x1e\xff\xdb\x00C\x01\x05\x05\x05\x07\x06\x07\x0e\x08\x08\x0e\x1e\x14\x11\x14\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\xff\xc0\x00\x11\x08\x00\x08\x00\x08\x03\x01"\x00\x02\x11\x01\x03\x11\x01\xff\xc4\x00\x15\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\xff\xc4\x00\x19\x10\x00\x03\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x06\x11A\xff\xc4\x00\x14\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xc4\x00\x14\x11\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xda\x00\x0c\x03\x01\x00\x02\x11\x03\x11\x00?\x00\x9d\xf29wU5Q\xd6\xfd\x00\x01\xff\xd9'
-        u.save()
+        LdapUser.objects.create(
+            first_name=u"Fôo",
+            last_name=u"Usér",
+            full_name=u"Fôo Usér",
+            group=1000,
+            home_directory="/home/foouser",
+            uid=2000,
+            username="foouser")
 
     def test_get(self):
         u = LdapUser.objects.get(username='foouser')
@@ -318,51 +331,35 @@ class UserTestCase(BaseTestCase):
         self.assertEquals(u.home_directory, '/home/foouser')
         self.assertEquals(u.uid, 2000)
         self.assertEquals(u.username, 'foouser')
-        self.assertEquals(u.photo, '\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xfe\x00\x1cCreated with GIMP on a Mac\xff\xdb\x00C\x00\x05\x03\x04\x04\x04\x03\x05\x04\x04\x04\x05\x05\x05\x06\x07\x0c\x08\x07\x07\x07\x07\x0f\x0b\x0b\t\x0c\x11\x0f\x12\x12\x11\x0f\x11\x11\x13\x16\x1c\x17\x13\x14\x1a\x15\x11\x11\x18!\x18\x1a\x1d\x1d\x1f\x1f\x1f\x13\x17"$"\x1e$\x1c\x1e\x1f\x1e\xff\xdb\x00C\x01\x05\x05\x05\x07\x06\x07\x0e\x08\x08\x0e\x1e\x14\x11\x14\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\x1e\xff\xc0\x00\x11\x08\x00\x08\x00\x08\x03\x01"\x00\x02\x11\x01\x03\x11\x01\xff\xc4\x00\x15\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\xff\xc4\x00\x19\x10\x00\x03\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x06\x11A\xff\xc4\x00\x14\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xc4\x00\x14\x11\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xda\x00\x0c\x03\x01\x00\x02\x11\x03\x11\x00?\x00\x9d\xf29wU5Q\xd6\xfd\x00\x01\xff\xd9')
 
         self.assertRaises(LdapUser.DoesNotExist, LdapUser.objects.get, username='does_not_exist')
 
+    @mock.patch('ldapdb.backends.ldap.base.DatabaseWrapper.rename_s',
+                new=mock_rename_s)
     def test_update(self):
         u = LdapUser.objects.get(username='foouser')
         u.first_name = u'Fôo2'
         u.save()
-        
+
         # make sure DN gets updated if we change the pk
         u.username = 'foouser2'
         u.save()
         self.assertEquals(u.dn, 'uid=foouser2,%s' % LdapUser.base_dn)
 
+
 class ScopedTestCase(BaseTestCase):
-    def setUp(self):
-        super(ScopedTestCase, self).setUp()
-
-        self.scoped_model = LdapGroup.scoped("ou=contacts,%s" % LdapGroup.base_dn)
-        self._add_base_dn(self.scoped_model)
-
-    def tearDown(self):
-        self._remove_base_dn(self.scoped_model)
-        super(ScopedTestCase, self).tearDown()
 
     def test_scope(self):
-        ScopedGroup = self.scoped_model
+        scoped_model = LdapGroup.scoped("ou=contacts,%s" % LdapGroup.base_dn)
+        ScopedGroup = scoped_model
 
-        # create group
-        g = LdapGroup()
-        g.name = "foogroup"
-        g.gid = 1000
-        g.save()
+        # # create group
+        g = LdapGroup.objects.create(name="foogroup", gid=1000)
 
         qs = LdapGroup.objects.all()
         self.assertEquals(qs.count(), 1)
 
-        qs = ScopedGroup.objects.all()
-        self.assertEquals(qs.count(), 0)
-
-        # create scoped group
-        g2 = ScopedGroup()
-        g2.name = "scopedgroup"
-        g2.gid = 5000
-        g2.save()
+        g2 = ScopedGroup.objects.create(name="scopedgroup", gid=5000)
 
         qs = LdapGroup.objects.all()
         self.assertEquals(qs.count(), 2)
@@ -374,43 +371,36 @@ class ScopedTestCase(BaseTestCase):
         self.assertEquals(g2.name, u'scopedgroup')
         self.assertEquals(g2.gid, 5000)
 
+
 class AdminTestCase(BaseTestCase):
     fixtures = ['test_users.json']
 
     def setUp(self):
         super(AdminTestCase, self).setUp()
 
-        g = LdapGroup()
-        g.name = "foogroup"
-        g.gid = 1000
-        g.usernames = ['foouser', 'baruser']
-        g.save()
+        LdapGroup.objects.create(
+            name="foogroup", gid=1000, usernames=['foouser', 'baruser'])
 
-        g = LdapGroup()
-        g.name = "bargroup"
-        g.gid = 1001
-        g.usernames = ['zoouser', 'baruser']
-        g.save()
+        LdapGroup.objects.create(
+            name="bargroup", gid=1001, usernames=['zoouser', 'baruser'])
 
-        u = LdapUser()
-        u.first_name = "Foo"
-        u.last_name = "User"
-        u.full_name = "Foo User"
-        u.group = 1000
-        u.home_directory = "/home/foouser"
-        u.uid = 2000
-        u.username = "foouser"
-        u.save()
+        LdapUser.objects.create(
+            first_name="Foo",
+            last_name="User",
+            full_name="Foo User",
+            group=1000,
+            home_directory="/home/foouser",
+            uid=2000,
+            username="foouser")
 
-        u = LdapUser()
-        u.first_name = "Bar"
-        u.last_name = "User"
-        u.full_name = "Bar User"
-        u.group = 1001
-        u.home_directory = "/home/baruser"
-        u.uid = 2001
-        u.username = "baruser"
-        u.save()
+        LdapUser.objects.create(
+            first_name="Bar",
+            last_name="User",
+            full_name="Bar User",
+            group=1001,
+            home_directory="/home/baruser",
+            uid=2001,
+            username="baruser")
 
         self.client.login(username="test_user", password="password")
 
@@ -454,12 +444,6 @@ class AdminTestCase(BaseTestCase):
         qs = LdapGroup.objects.all()
         self.assertEquals(qs.count(), 1)
 
-    def test_group_search(self):
-        response = self.client.get('/admin/examples/ldapgroup/?q=foo')
-        self.assertContains(response, "Ldap groups")
-        self.assertContains(response, "foogroup")
-        self.assertContains(response, "1000")
-
     def test_user_list(self):
         response = self.client.get('/admin/examples/ldapuser/')
         self.assertContains(response, "Ldap users")
@@ -486,4 +470,3 @@ class AdminTestCase(BaseTestCase):
     def test_user_delete(self):
         response = self.client.post('/admin/examples/ldapuser/foouser/delete/', {'yes': 'post'})
         self.assertRedirects(response, '/admin/examples/ldapuser/')
-
