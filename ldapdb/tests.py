@@ -106,14 +106,42 @@ class WhereTestCase(TestCase):
         where.add((Constraint("uid", "uid", IntegerField()), 'lte', 1), AND)
         self.assertEquals(where_as_ldap(where), ("(uid<=1)", []))
 
-    def test_list_field_contains(self):
+    def test_list_field_endswith(self):
         where = WhereNode()
-        where.add((Constraint("memberUid", "memberUid", ListField()), 'contains', 'foouser'), AND)
-        self.assertEquals(where_as_ldap(where), ("(memberUid=foouser)", []))
+        where.add((Constraint("cn", "cn", ListField()), 'endswith', "test"), AND)
+        self.assertEquals(where_as_ldap(where), ("(cn=*test)", []))
+
+    def test_list_field_startswith(self):
+        where = WhereNode()
+        where.add((Constraint("cn", "cn", ListField()), 'startswith', "test"), AND)
+        self.assertEquals(where_as_ldap(where), ("(cn=test*)", []))
 
         where = WhereNode()
-        where.add((Constraint("memberUid", "memberUid", ListField()), 'contains', '(foouser)'), AND)
-        self.assertEquals(where_as_ldap(where), ("(memberUid=\\28foouser\\29)", []))
+        where.add((Constraint("cn", "cn", ListField()), 'startswith', "te*st"), AND)
+        self.assertEquals(where_as_ldap(where), ("(cn=te\\2ast*)", []))
+
+    def test_list_field_contains(self):
+        where = WhereNode()
+        where.add((Constraint("cn", "cn", ListField()), 'contains', "test"), AND)
+        self.assertEquals(where_as_ldap(where), ("(cn=*test*)", []))
+
+        where = WhereNode()
+        where.add((Constraint("cn", "cn", ListField()), 'contains', "te*st"), AND)
+        self.assertEquals(where_as_ldap(where), ("(cn=*te\\2ast*)", []))
+
+    def test_list_field_exact(self):
+        where = WhereNode()
+        where.add((Constraint("cn", "cn", ListField()), 'exact', "test"), AND)
+        self.assertEquals(where_as_ldap(where), ("(cn=test)", []))
+
+    def test_list_field_in(self):
+        where = WhereNode()
+        where.add((Constraint("cn", "cn", ListField()), 'in', ["foo", "bar"]), AND)
+        self.assertEquals(where_as_ldap(where), ("(|(cn=foo)(cn=bar))", []))
+
+        where = WhereNode()
+        where.add((Constraint("cn", "cn", ListField()), 'in', ["(foo)", "(bar)"]), AND)
+        self.assertEquals(where_as_ldap(where), ("(|(cn=\\28foo\\29)(cn=\\28bar\\29))", []))
 
     def test_and(self):
         where = WhereNode()
